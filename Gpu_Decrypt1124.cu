@@ -9529,40 +9529,63 @@ bool Decrypt(uint8_t* RndAndCipher)
 #include <chrono>
 
 int main(int argc, char** argv) {
-	if (argc != 6) {
-		printf("Usage: %s <nC_hex> <aC_hex> <aT_hex> <start> <end>\n", argv[0]);
+	// Parse and validate hex parameters
+	uint64_t nC = 0x3FFE1FB6CC513FULL;
+	uint32_t aC = 0xF355F1A;
+	uint32_t aT = 0x609D6;
+	uint16_t start = 0x0000;
+	uint16_t end = 0xFFFF; 
+
+	if (argc == 6) {
+		try {
+			nC = std::stoull(argv[1], nullptr, 16);
+			aC = std::stoul(argv[2], nullptr, 16); 
+			aT = std::stoul(argv[3], nullptr, 16);
+			start = std::stoul(argv[4], nullptr, 16);
+			end = std::stoul(argv[5], nullptr, 16);
+		} catch (const std::exception& e) {
+			printf("Error parsing parameters: %s\n", e.what());
+			return 1;
+		}
+	}
+
+	// Validate parameter ranges
+	if (nC > 0xFFFFFFFFFFFFFFULL || aC > 0xFFFFFFF || aT > 0xFFFFF) {
+		printf("Invalid input parameters\n");
 		return 1;
 	}
 
-	std::string s_nC(argv[1]), s_aC(argv[2]), s_aT(argv[3]);
-	uint64_t nC = std::stoull(s_nC, nullptr, 16);
-	uint32_t aC = std::stoul(s_aC, nullptr, 16);
-	uint32_t aT = std::stoul(s_aT, nullptr, 16);
-	uint16_t start = std::stoul(argv[4], nullptr, 16);
-	uint16_t end = std::stoul(argv[5], nullptr, 16);
-
 	uint8_t RndCipher[39] = {0};
 
-	// Pack nC (56 bits) into RndCipher
-	for (int i = 0; i < 7; i++) {
-		RndCipher[i] = (nC >> (8 * (6 - i))) & 0xFF;
-	}
+	// Pack challenge bits into RndCipher array
+	// nC (56 bits) -> bytes 0-6
+	RndCipher[0] = (nC >> 48) & 0xFF;
+	RndCipher[1] = (nC >> 40) & 0xFF;
+	RndCipher[2] = (nC >> 32) & 0xFF;
+	RndCipher[3] = (nC >> 24) & 0xFF;
+	RndCipher[4] = (nC >> 16) & 0xFF;
+	RndCipher[5] = (nC >> 8) & 0xFF;
+	RndCipher[6] = nC & 0xFF;
 
-	// Pack divergency bits (7 bits) and first bit of aC
-	RndCipher[7] = ((nC & 0x01) << 7) | ((aC >> 27) & 0x7F);
+	// Pack auth bits into RndCipher array
+	// aC (28 bits) -> bytes 7-10
+	RndCipher[7] = (aC >> 21) & 0x7F;  // 7 bits
+	RndCipher[8] = (aC >> 13) & 0xFF;   // 8 bits
+	RndCipher[9] = (aC >> 5) & 0xFF;    // 8 bits
+	RndCipher[10] = (aC << 3) & 0xF8;   // 5 bits
 
-	// Pack aC (remaining 27 bits)
-	for (int i = 0; i < 3; i++) {
-		RndCipher[8 + i] = (aC >> (8 * (2 - i))) & 0xFF;
-	}
+	// Pack tag bits into RndCipher array  
+	// aT (20 bits) -> bytes 10-13
+	RndCipher[10] |= (aT >> 17) & 0x07; // 3 bits
+	RndCipher[11] = (aT >> 9) & 0xFF;   // 8 bits  
+	RndCipher[12] = (aT >> 1) & 0xFF;   // 8 bits
+	RndCipher[13] = (aT << 7) & 0x80;   // 1 bit
 
-	// Pack aT (20 bits)
-	RndCipher[11] = (aC & 0xFF) << 4 | ((aT >> 16) & 0x0F);
-	RndCipher[12] = (aT >> 8) & 0xFF;
-	RndCipher[13] = aT & 0xFF;
-
-	// Pad remaining bytes with zeros
-	memset(RndCipher + 14, 0, 25);
+	// Debug output
+	printf("Challenge: %014llX\n", nC);
+	printf("Auth: %07X\n", aC);
+	printf("Tag: %05X\n", aT);
+	printf("Range: %04X-%04X\n", start, end);
 
 	std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
 

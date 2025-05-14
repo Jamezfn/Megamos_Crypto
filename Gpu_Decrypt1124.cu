@@ -10,6 +10,13 @@
 #include <malloc.h>
 #include <string>
 #include <unistd.h>
+#include <chrono>
+#include <ctime>
+#include <iostream>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+
 
 ////windows 下修正
 //#include"Windows.h"
@@ -26,7 +33,8 @@ using namespace std;
 #define _CRT_SECURE_NO_WARNINGS
 
 
-struct timeval start, end;
+struct timeval start;
+auto decryptionEnd = std::chrono::high_resolution_clock::now(); // Renamed from 'end' to 'decryptionEnd' for clarity
 
 
 
@@ -9514,41 +9522,69 @@ bool Decrypt(uint8_t* RndAndCipher)
 
     return success;
 }
+#include <iostream>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+#include <chrono>
 
-int main()
-{
-	uint32_t fjl = sizeof(G_TableCommonBlock);
-	uint32_t fak = sizeof(BiuParaNode);
-	cudaDeviceProp cdp;
-	cudaGetDeviceProperties(&cdp, 0);
+int main(int argc, char** argv) {
+	if (argc != 6) {
+		printf("Usage: %s <nC_hex> <aC_hex> <aT_hex> <start> <end>\n", argv[0]);
+		return 1;
+	}
 
-	uint8_t RndCipher[0x27] = {
-		//0xd8, 0xc5, 0x26, 0x05, 0x2c, 0xd3, 0xda, 0xCE, 0x1B, 0x22, 0xA6, 0xB6, 0x81,
-		//0x5b, 0xe0, 0xef, 0x42, 0xf4, 0x16, 0x8f, 0xe1, 0x7d, 0xb8, 0xcc, 0x4a, 0x9e,
+	std::string s_nC(argv[1]), s_aC(argv[2]), s_aT(argv[3]);
+	uint64_t nC = std::stoull(s_nC, nullptr, 16);
+	uint32_t aC = std::stoul(s_aC, nullptr, 16);
+	uint32_t aT = std::stoul(s_aT, nullptr, 16);
+	uint16_t start = std::stoul(argv[4], nullptr, 16);
+	uint16_t end = std::stoul(argv[5], nullptr, 16);
 
-		0x19, 0x88, 0x53, 0x40, 0x78, 0xFD, 0x4A, 0x73, 0x0a, 0x61, 0x36, 0x7f, 0xe5,
-		0x2d, 0x49, 0xc3, 0x8c, 0xe2, 0xd7, 0xe2, 0x7f, 0xf7, 0x3e, 0x8d, 0x05, 0x5a,
-		//0xfa, 0xfc, 0x93, 0x2b, 0x4f, 0xf2, 0x9f, 0xb4, 0x53, 0x0b, 0x9b, 0xda, 0x30
-	};
+	uint8_t RndCipher[39] = {0};
 
+	// Pack nC (56 bits) into RndCipher
+	for (int i = 0; i < 7; i++) {
+		RndCipher[i] = (nC >> (8 * (6 - i))) & 0xFF;
+	}
 
+	// Pack divergency bits (7 bits) and first bit of aC
+	RndCipher[7] = ((nC & 0x01) << 7) | ((aC >> 27) & 0x7F);
 
-	Decrypt(RndCipher);
+	// Pack aC (remaining 27 bits)
+	for (int i = 0; i < 3; i++) {
+		RndCipher[8 + i] = (aC >> (8 * (2 - i))) & 0xFF;
+	}
 
-	
-	long time_usec = 1000000 * (end.tv_sec - start.tv_sec) + (end.tv_usec - end.tv_usec);
+	// Pack aT (20 bits)
+	RndCipher[11] = (aC & 0xFF) << 4 | ((aT >> 16) & 0x0F);
+	RndCipher[12] = (aT >> 8) & 0xFF;
+	RndCipher[13] = aT & 0xFF;
 
+	// Pad remaining bytes with zeros
+	memset(RndCipher + 14, 0, 25);
 
+	std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
 
-	////windows 下修正  杨加成 
-	//clock_t  clockBegin, clockEnd;
-	//clockBegin = clock();
-	//Decrypt(RndCipher);
-	//clockEnd = clock();
-	//printf("%d\n", clockEnd - clockBegin);
+	bool ok = Decrypt(RndCipher);
 
+	auto decryptionEnd = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed = decryptionEnd - start_time;
 
-    return 0;
+	if (ok) {
+		uint8_t host_BiuKey[13];
+		cudaMemcpyFromSymbol(host_BiuKey, dev_BiuKey, sizeof(host_BiuKey), 0, cudaMemcpyDeviceToHost);
+		printf("Key recovered: ");
+		for (int i = 1; i <= 12; i++) // Assuming dev_BiuKey stores 12 bytes
+			printf("%02X", host_BiuKey[i]);
+		printf("\n");
+	} else {
+		printf("Key not found\n");
+	}
+
+	printf("Decryption time: %.3f seconds\n", elapsed.count());
+
+	return 0;
 }
 
 

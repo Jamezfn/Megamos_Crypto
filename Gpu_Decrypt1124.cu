@@ -1,4 +1,6 @@
-﻿#include <cuda_runtime.h>
+﻿// #define __CUDACC__
+
+#include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,13 +12,7 @@
 #include <malloc.h>
 #include <string>
 #include <unistd.h>
-#include <chrono>
-#include <ctime>
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <cstdlib>
-
+#include <sys/time.h>
 
 ////windows 下修正
 //#include"Windows.h"
@@ -33,8 +29,7 @@ using namespace std;
 #define _CRT_SECURE_NO_WARNINGS
 
 
-struct timeval start;
-auto decryptionEnd = std::chrono::high_resolution_clock::now(); // Renamed from 'end' to 'decryptionEnd' for clarity
+struct timeval start, end_time;
 
 
 
@@ -68,9 +63,9 @@ bool ReadTCBH_OP(CommonHeadIndexStr* Buf_TCBHis, uint16_t DstTCBHisID, string sT
 	uint16_t DirIndex = DstTCBHisID / 0x10;
     uint8_t FileIndex = DstTCBHisID % 0x10;
     //string sTmp = sTComHead + to_string(DirIndex) + "/" + to_string(FileIndex) + "_ComHead.bin";
-   	string sTmp = "../6_ComHead.bin";
+   	// string sTmp = "../6_ComHead.bin";
 	//string sTmp = "/mnt/sd/Tlmr/255/CommonHead/0/0_ComHead.bin";
-
+	string sTmp = "/mnt/sd1/Tlmr/255/CommonHead/x_ComHead.bin";
 	const char* DstTCBHisPath = sTmp.c_str();
 	uint32_t TCBHiCountTmp = 0;
 
@@ -121,7 +116,8 @@ bool ReadTlmr_OP(InitLMR* Buf_Initlmr, uint32_t Buf_TlmrIndexCount, uint16_t Dst
     //string sTmp = sTlmrData + to_string(DirIndex) + "/" + to_string(FileIndex) + ".bin";
 
     //string sTmp = "/mnt/sd/Tlmr/255/Data/0/0.bin";
-	string sTmp = "../6_TlmrNew.bin";
+	// string sTmp = "../6_TlmrNew.bin";
+	string sTmp = "/mnt/sd1/Tlmr/255/Data/x_Tlmr.bin";
 	const char* DstTlmrPath = sTmp.c_str();
 	uint32_t TlmrIndexCountTmp;
 
@@ -170,7 +166,8 @@ bool ReadTh_OP(InitGH* Buf_Initgh, uint32_t Buf_ThIndexCount, uint16_t DstThID, 
     uint8_t FileIndex = DstThID % 0x10;
     //string sTmp = sThData + to_string(DirIndex) + "/" + to_string(FileIndex) + ".bin";
     //string sTmp = "/mnt/nv1/Th/Data/0/0.bin";
-	string sTmp = "/mnt/nv1/6_ThNew.bin";
+	// string sTmp = "/mnt/nv1/6_ThNew.bin";
+	string sTmp = "/mnt/nv1/Th/Data/x_Th.bin";
 	const char* DstThPath = sTmp.c_str();
 	uint32_t ThIndexCountTmp = 0;
 
@@ -2427,6 +2424,7 @@ __device__ void PreSort(const InitGH* __restrict__ IGH, const InitLMR* __restric
 				uint32_t* __restrict__ BiuCount, uint32_t* __restrict__ SpCount, const uint8_t Tid)
 {
 	uint32_t AllCount, LastCount, ThOffset, TlmrOffset, i;
+	*SpCount = 0;
 
 	//0
 	AllCount = CHIS[0].TlmrCount * CHIS[0].ThCount;
@@ -2658,23 +2656,23 @@ __device__ void RevSucFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict__
 				uint32_t* __restrict__ BiuCount, const uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, key7Byte_H, key7Byte_L, idyin, idyout;
+	uint32_t g, h, l, m, r, a, b, c, key, key7Byte_H, key7Byte_L, idyIn, idyOut;
 	__shared__ uint32_t checkCount_In, checkCount_Out;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
 
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x){
-		g = Bs_Sp->key7Byte_H[idyin];
-		h = Bs_Sp->key7Byte_L[idyin];
-		key = Bs_Sp->key[idyin];
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x){
+		g = Bs_Sp->key7Byte_H[idyIn];
+		h = Bs_Sp->key7Byte_L[idyIn];
+		key = Bs_Sp->key[idyIn];
 		l = key >> 16;
 		m = (key >> 8) & 0xff;
 		r = key & 0xff;
-		if (g == 0x5e6e6b && h == 0x588 && l == 0x7d && m == 0x5c && r == 0x5)
-		{
-			uint8_t jfla = 1;
-		}
+		// if (g == 0x5e6e6b && h == 0x588 && l == 0x7d && m == 0x5c && r == 0x5)
+		// {
+		// 	uint8_t jfla = 1;
+		// }
 
 		//h = H_1(h);
 		{
@@ -2832,7 +2830,7 @@ __device__ void RevSucFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict__
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -2951,23 +2949,23 @@ __device__ void RevSucFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict__
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key[idyout] = 0;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key[idyout] = 1;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key[idyOut] = 0;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key[idyOut] = 1;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 
-		g = Bs_Sp->key7Byte_H[idyin];
+		g = Bs_Sp->key7Byte_H[idyIn];
 		l = key >> 16;
 		m = (key >> 8) & 0xff;
 		r = key & 0xff;
@@ -3111,7 +3109,7 @@ __device__ void RevSucFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict__
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR_v2(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -3231,20 +3229,20 @@ __device__ void RevSucFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict__
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key[idyout] = 0;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key[idyout] = 1;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key[idyOut] = 0;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key[idyOut] = 1;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 	}
 	__syncthreads();
@@ -3255,19 +3253,19 @@ __device__ void RevSucSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 				uint32_t* __restrict__ BiuCount, const uint8_t Tid, const uint32_t Depth)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, idyin, idyout;
+	uint32_t g, h, l, m, r, a, b, c, key, idyIn, idyOut;
 	__shared__ uint32_t checkCount_In, checkCount_Out;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
 
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x){
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x){
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
 		key <<= 1;
 
 		//h = H_1(h);
@@ -3426,7 +3424,7 @@ __device__ void RevSucSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -3545,26 +3543,26 @@ __device__ void RevSucSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key[idyout] = key | 1;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key[idyOut] = key | 1;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 
-		g = Bs_In->g[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
+		g = Bs_In->g[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
 		///////////calc
 		{
 			//m6 = ((l >> 4) & 1) ^ 1;	g = G_1(g, h, m6);
@@ -3705,7 +3703,7 @@ __device__ void RevSucSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR_v2(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -3825,20 +3823,20 @@ __device__ void RevSucSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key[idyout] = key | 1;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key[idyOut] = key | 1;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 	}
 	__syncthreads();
@@ -3849,19 +3847,19 @@ __device__ void RevSucThird(BiuState* __restrict__ Bs_In, BiuState* __restrict__
 				uint32_t* __restrict__ BiuCount, const uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, idyin, idysp;
+	uint32_t g, h, l, m, r, a, b, c, key, idyIn, idysp;
 	__shared__ uint32_t checkCount_In, checkCount_Sp;
 	checkCount_In = *BiuCount;
 	checkCount_Sp = 0;
 	__syncthreads();
 
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x){	
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x){	
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
 
 		//h = H_1(h);
 		{
@@ -4019,7 +4017,7 @@ __device__ void RevSucThird(BiuState* __restrict__ Bs_In, BiuState* __restrict__
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -4156,10 +4154,10 @@ __device__ void RevSucThird(BiuState* __restrict__ Bs_In, BiuState* __restrict__
 			Bs_Sp->r[idysp] = r;
 		}
 
-		g = Bs_In->g[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
+		g = Bs_In->g[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
 		///////////calc
 		{
 			//m6 = ((l >> 4) & 1) ^ 1;	g = G_1(g, h, m6);
@@ -4300,7 +4298,7 @@ __device__ void RevSucThird(BiuState* __restrict__ Bs_In, BiuState* __restrict__
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 			//a = NLFSR_v2(a_Pre, b_Pre, c_Pre, l, m, r);
@@ -4446,7 +4444,7 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 				uint32_t* __restrict__ BiuCount, uint32_t Offset, const uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, kb, idysp, idyout;
+	uint32_t g, h, l, m, r, a, b, c, key, kb, idysp, idyOut;
 	__shared__ uint32_t checkCount_Sp, checkCount_Out;
 	checkCount_Sp = *BiuCount;
 	checkCount_Out = 0;
@@ -4620,7 +4618,7 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 		}
@@ -4628,22 +4626,22 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key7Byte_L[idyout] = kb;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key7Byte_L[idyout] = kb | 1;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key7Byte_L[idyOut] = kb;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key7Byte_L[idyOut] = kb | 1;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 
 		g = Bs_Sp->g[Offset];
@@ -4790,7 +4788,7 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 		}
@@ -4799,22 +4797,22 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key7Byte_L[idyout] = kb;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key7Byte_L[idyout] = kb | 1;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key7Byte_L[idyOut] = kb;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key7Byte_L[idyOut] = kb | 1;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 	}
 	__syncthreads();
@@ -4824,21 +4822,21 @@ __device__ void RevSucSpFirst(BiuState* __restrict__ Bs_Sp, BiuState* __restrict
 __device__ void RevSucSpSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict__ Bs_Out, uint32_t* __restrict__ BiuCount, const uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, kb, idyin, idyout;
+	uint32_t g, h, l, m, r, a, b, c, key, kb, idyIn, idyOut;
 	__shared__ uint32_t checkCount_In, checkCount_Out;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
 
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		kb = Bs_In->key7Byte_L[idyin];
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		kb = Bs_In->key7Byte_L[idyIn];
 		kb <<= 1;
 
 		//h = H_1(h);
@@ -4997,7 +4995,7 @@ __device__ void RevSucSpSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 		}
@@ -5005,28 +5003,28 @@ __device__ void RevSucSpSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key7Byte_L[idyout] = kb;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key7Byte_L[idyout] = kb | 1;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key7Byte_L[idyOut] = kb;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key7Byte_L[idyOut] = kb | 1;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 
-		g = Bs_In->g[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
+		g = Bs_In->g[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
 		///////////calc
 		{
 			//m6 = ((l >> 4) & 1) ^ 1;	g = G_1(g, h, m6);
@@ -5167,7 +5165,7 @@ __device__ void RevSucSpSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 				para_Q_H = r << 1;
 				r = para_Q_H | c;
 				para_T0 = r >> 7;
-				c = para_T0 & 1;;
+				c = para_T0 & 1;
 				r &= 0x7f;
 			}
 		}
@@ -5176,22 +5174,22 @@ __device__ void RevSucSpSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 		b = para_T0 & 1;
 		if (b == 1)
 		{
-			idyout = atomicAdd(&checkCount_Out, 2);
-			Bs_Out->key7Byte_L[idyout] = kb;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			idyout += 1;
-			Bs_Out->key7Byte_L[idyout] = kb | 1;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->g[idyout] = g ^ 0x80000;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
+			idyOut = atomicAdd(&checkCount_Out, 2);
+			Bs_Out->key7Byte_L[idyOut] = kb;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			idyOut += 1;
+			Bs_Out->key7Byte_L[idyOut] = kb | 1;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->g[idyOut] = g ^ 0x80000;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
 		}
 	}
 	__syncthreads();
@@ -5203,22 +5201,22 @@ __device__ void RevCheckInit(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 {
 	uint64_t para_Q, para_P;
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t g, h, l, m, r, a, b, c, key, kb, Key7Byte_H, Key7Byte_L, idyin, idyout;
+	uint32_t g, h, l, m, r, a, b, c, key, kb, Key7Byte_H, Key7Byte_L, idyIn, idyOut;
 	__shared__ uint32_t checkCount_In, checkCount_Out;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
 	
 	//0-7
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		kb = Bs_In->key7Byte_L[idyin];
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		kb = Bs_In->key7Byte_L[idyIn];
 
 		/////////////////////////////Init_1->Init
 		//_Init
@@ -7585,15 +7583,15 @@ __device__ void RevCheckInit(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 
 		if (b == dev_aCT1[Tid][0])
 		{
-			idyout = atomicAdd(&checkCount_Out, 1);	
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->key7Byte_L[idyout] = Key7Byte_L;
-			Bs_Out->key7Byte_H[idyout] = Key7Byte_H;
+			idyOut = atomicAdd(&checkCount_Out, 1);	
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->key7Byte_L[idyOut] = Key7Byte_L;
+			Bs_Out->key7Byte_H[idyOut] = Key7Byte_H;
 		}
 	}
 	__syncthreads();
@@ -7603,21 +7601,21 @@ __device__ void RevCheckInit(BiuState* __restrict__ Bs_In, BiuState* __restrict_
 __device__ void RevCheckFirst(BiuState* __restrict__ Bs_In, BiuState* __restrict__ Bs_Out, uint32_t* __restrict__ BiuCount, uint8_t CheckIndex, uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyin, idyout;
+	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyIn, idyOut;
 	__shared__ uint32_t checkCount_Out, checkCount_In;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		Key7Byte_H = Bs_In->key7Byte_H[idyin];
-		Key7Byte_L = Bs_In->key7Byte_L[idyin];	 
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		Key7Byte_H = Bs_In->key7Byte_H[idyIn];
+		Key7Byte_L = Bs_In->key7Byte_L[idyIn];	 
 
 		/////////calc
 		{
@@ -7898,15 +7896,15 @@ __device__ void RevCheckFirst(BiuState* __restrict__ Bs_In, BiuState* __restrict
 		para_T0 = CheckIndex + 1;
 		if (b == dev_aCT1[Tid][para_T0])
 		{
-			idyout = atomicAdd(&checkCount_Out, 1);
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->key7Byte_L[idyout] = Key7Byte_L;
-			Bs_Out->key7Byte_H[idyout] = Key7Byte_H;
+			idyOut = atomicAdd(&checkCount_Out, 1);
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->key7Byte_L[idyOut] = Key7Byte_L;
+			Bs_Out->key7Byte_H[idyOut] = Key7Byte_H;
 		}
 	}
 	__syncthreads();
@@ -7917,21 +7915,21 @@ __device__ void RevCheckFirstToMid(BiuState* __restrict__ Bs_In, BiuState* __res
 				uint32_t* __restrict__ BiuCount, uint32_t* __restrict__ MidCount, uint8_t CheckIndex, uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyin, idymid;
+	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyIn, idymid;
 	__shared__ uint32_t checkCount_Mid, checkCount_In;
 	checkCount_In = *BiuCount;
 	checkCount_Mid = *MidCount;
 	__syncthreads();
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		Key7Byte_H = Bs_In->key7Byte_H[idyin];
-		Key7Byte_L = Bs_In->key7Byte_L[idyin];
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		Key7Byte_H = Bs_In->key7Byte_H[idyIn];
+		Key7Byte_L = Bs_In->key7Byte_L[idyIn];
 
 		/////////calc
 		{
@@ -8231,7 +8229,7 @@ __device__ void RevCheckFirstFromMid(BiuState* __restrict__ Bs_Mid, BiuState* __
 				uint32_t* __restrict__ BiuCount, uint8_t CheckIndex, uint8_t Tid)
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idymid, idyout;
+	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idymid, idyOut;
 	__shared__ uint32_t checkCount_Out, checkCount_Mid;
 	checkCount_Mid = *BiuCount;
 	checkCount_Out = 0;
@@ -8527,15 +8525,15 @@ __device__ void RevCheckFirstFromMid(BiuState* __restrict__ Bs_Mid, BiuState* __
 		para_T0 = CheckIndex + 1;
 		if (b == dev_aCT1[Tid][para_T0])
 		{
-			idyout = atomicAdd(&checkCount_Out, 1);
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->key7Byte_L[idyout] = Key7Byte_L;
-			Bs_Out->key7Byte_H[idyout] = Key7Byte_H;
+			idyOut = atomicAdd(&checkCount_Out, 1);
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->key7Byte_L[idyOut] = Key7Byte_L;
+			Bs_Out->key7Byte_H[idyOut] = Key7Byte_H;
 		}
 	}
 	__syncthreads();
@@ -8545,21 +8543,21 @@ __device__ void RevCheckFirstFromMid(BiuState* __restrict__ Bs_Mid, BiuState* __
 __device__ void RevCheckSecond(BiuState* __restrict__ Bs_In, BiuState* __restrict__ Bs_Out, uint32_t* __restrict__ BiuCount, uint8_t CheckIndex, uint8_t Tid) 
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyin, idyout;
+	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyIn, idyOut;
 	__shared__ uint32_t checkCount_Out, checkCount_In;
 	checkCount_In = *BiuCount;
 	checkCount_Out = 0;
 	__syncthreads();
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		Key7Byte_H = Bs_In->key7Byte_H[idyin];
-		Key7Byte_L = Bs_In->key7Byte_L[idyin];
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		Key7Byte_H = Bs_In->key7Byte_H[idyIn];
+		Key7Byte_L = Bs_In->key7Byte_L[idyIn];
 		
 		/////////calc
 		{
@@ -8832,15 +8830,15 @@ __device__ void RevCheckSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 		}
 		if (b == dev_aCT1[Tid][CheckIndex])
 		{
-			idyout = atomicAdd(&checkCount_Out, 1);
-			Bs_Out->g[idyout] = g;
-			Bs_Out->h[idyout] = h;
-			Bs_Out->l[idyout] = l;
-			Bs_Out->m[idyout] = m;
-			Bs_Out->r[idyout] = r;
-			Bs_Out->key[idyout] = key;
-			Bs_Out->key7Byte_L[idyout] = Key7Byte_L;
-			Bs_Out->key7Byte_H[idyout] = Key7Byte_H;
+			idyOut = atomicAdd(&checkCount_Out, 1);
+			Bs_Out->g[idyOut] = g;
+			Bs_Out->h[idyOut] = h;
+			Bs_Out->l[idyOut] = l;
+			Bs_Out->m[idyOut] = m;
+			Bs_Out->r[idyOut] = r;
+			Bs_Out->key[idyOut] = key;
+			Bs_Out->key7Byte_L[idyOut] = Key7Byte_L;
+			Bs_Out->key7Byte_H[idyOut] = Key7Byte_H;
 		}
 	}
 	__syncthreads();
@@ -8850,21 +8848,21 @@ __device__ void RevCheckSecond(BiuState* __restrict__ Bs_In, BiuState* __restric
 __device__ void RevCheckEnd(BiuState* __restrict__ Bs_In, uint32_t* __restrict__ BiuCount, uint8_t Tid) 
 {
 	uint32_t para_Q_H, para_Q_L, para_T0;
-	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyin;
+	uint32_t a, b, c, g, h, l, m, r, key, Key7Byte_H, Key7Byte_L, idyIn;
 	__shared__ uint32_t checkCount_In;
 	checkCount_In = *BiuCount;
 	__syncthreads();
 
-	for (idyin = threadIdx.x; idyin < checkCount_In; idyin += blockDim.x)
+	for (idyIn = threadIdx.x; idyIn < checkCount_In; idyIn += blockDim.x)
 	{
-		g = Bs_In->g[idyin];
-		h = Bs_In->h[idyin];
-		l = Bs_In->l[idyin];
-		m = Bs_In->m[idyin];
-		r = Bs_In->r[idyin];
-		key = Bs_In->key[idyin];
-		Key7Byte_H = Bs_In->key7Byte_H[idyin];
-		Key7Byte_L = Bs_In->key7Byte_L[idyin];
+		g = Bs_In->g[idyIn];
+		h = Bs_In->h[idyIn];
+		l = Bs_In->l[idyIn];
+		m = Bs_In->m[idyIn];
+		r = Bs_In->r[idyIn];
+		key = Bs_In->key[idyIn];
+		Key7Byte_H = Bs_In->key7Byte_H[idyIn];
+		Key7Byte_L = Bs_In->key7Byte_L[idyIn];
 
 		/////////calc
 		{
@@ -9365,46 +9363,28 @@ bool ReadFunc(uint8_t tId, uint16_t ID)
 	return true;
 }
 
-bool Decrypt(uint8_t* RndAndCipher)
-{
-    cudaError_t SetDevIDExit;
-    SetDevIDExit = cudaSetDevice(0);
-    if (SetDevIDExit != cudaSuccess) {
+
+bool Decrypt(uint8_t* RndAndCipher) {
+    cudaError_t cuResult;
+    cudaStream_t streamTmp;
+    if (cudaSetDevice(0) != cudaSuccess) {
         printf("cudaSetDevice error!\n");
         return false;
     }
-
-    cudaError_t cuResult;
-    cudaStream_t streamTmp;
-    cuResult = cudaStreamCreate(&streamTmp);
-    if (cuResult != cudaSuccess) {
+    if (cudaStreamCreate(&streamTmp) != cudaSuccess) {
         return false;
     }
-
     uint8_t tId = 0;
-    if (InitCalcPara(RndAndCipher, tId) == false) {
+    if (!InitCalcPara(RndAndCipher, tId)) {
         cudaStreamDestroy(streamTmp);
         return false;
     }
-
     BiuParaNode* dev_Bpn;
-    cuResult = cudaMalloc((BiuParaNode**)&dev_Bpn, sizeof(BiuParaNode));
-    if (cuResult != cudaSuccess) {
-        cudaStreamDestroy(streamTmp);
-        return false;
-    }
-
     G_TableCommonBlock* dev_GTCB;
-    cuResult = cudaMalloc((G_TableCommonBlock**)&dev_GTCB, sizeof(G_TableCommonBlock));
-    if (cuResult != cudaSuccess) {
-        cudaStreamDestroy(streamTmp);
-        cudaFree(dev_Bpn);
-        return false;
-    }
-
     uint8_t* dev_Tid;
-    cuResult = cudaMallocManaged((uint8_t**)&dev_Tid, sizeof(uint8_t));
-    if (cuResult != cudaSuccess) {
+    if (cudaMalloc((void**)&dev_Bpn, sizeof(BiuParaNode)) != cudaSuccess ||
+        cudaMalloc((void**)&dev_GTCB, sizeof(G_TableCommonBlock)) != cudaSuccess ||
+        cudaMallocManaged((void**)&dev_Tid, sizeof(uint8_t)) != cudaSuccess) {
         cudaStreamDestroy(streamTmp);
         cudaFree(dev_Bpn);
         cudaFree(dev_GTCB);
@@ -9412,203 +9392,173 @@ bool Decrypt(uint8_t* RndAndCipher)
     }
     *dev_Tid = tId;
 
-    cuResult = cudaMemcpyAsync(dev_GTCB, &Local_G_TCBS->G_TCB[0], sizeof(G_TableCommonBlock), cudaMemcpyHostToDevice, streamTmp);
-    if (cuResult != cudaSuccess) {
-        cudaStreamDestroy(streamTmp);
-        cudaFree(dev_Bpn);
-        cudaFree(dev_GTCB);
-        cudaFree(dev_Tid);
-        return false;
-    }
-
-    cuResult = cudaStreamSynchronize(streamTmp);
-    if (cuResult != cudaSuccess) {
-        cudaStreamDestroy(streamTmp);
-        cudaFree(dev_Bpn);
-        cudaFree(dev_GTCB);
-        cudaFree(dev_Tid);
-        return false;
-    }
-
-    uint32_t AA[0x100] = {0};
     uint8_t BiuKey[13] = {0};
     uint16_t ID = 0;
-    if (ReadFunc(tId, ID) == false) {
+    if (!ReadFunc(tId, ID)) {
+        cudaStreamDestroy(streamTmp);
+        cudaFree(dev_Bpn);
+        cudaFree(dev_GTCB);
+        cudaFree(dev_Tid);
+        free(Local_BPN);
+        return false;
+    }
+    if (cudaMemcpyAsync(dev_GTCB, &Local_G_TCBS->G_TCB[0], sizeof(G_TableCommonBlock), cudaMemcpyHostToDevice, streamTmp) != cudaSuccess ||
+        cudaStreamSynchronize(streamTmp) != cudaSuccess) {
+        cudaStreamDestroy(streamTmp);
+        cudaFree(dev_Bpn);
+        cudaFree(dev_GTCB);
+        cudaFree(dev_Tid);
+        free(Local_BPN);
         return false;
     }
 
-    bool success = false;
-    while (1)
-    {
-        float tm0;
+    const uint16_t maxID = 1000;
+    while (ID < maxID) {
         cudaEvent_t e_start, e_end;
         cuResult = cudaEventCreate(&e_start);
         if (cuResult != cudaSuccess) {
             printf("host: cudaEventCreate e_start error %s\n", cudaGetErrorString(cuResult));
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
-
         cuResult = cudaEventCreate(&e_end);
         if (cuResult != cudaSuccess) {
             printf("host: cudaEventCreate e_end error %s\n", cudaGetErrorString(cuResult));
             cudaEventDestroy(e_start);
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
-
         cuResult = cudaEventRecord(e_start, streamTmp);
         if (cuResult != cudaSuccess) {
-            printf("host: cudaEventRecord error %s\n", cudaGetErrorString(cuResult));
+            printf("host: cudaEventRecord e_start error %s\n", cudaGetErrorString(cuResult));
             cudaEventDestroy(e_start);
             cudaEventDestroy(e_end);
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
 
         CudaCalcKey<<<kernelblock, kernelthread, 0, streamTmp>>>(dev_Bpn, dev_GTCB->ThInitgh, dev_GTCB->TlmrInitlmr, dev_GTCB->Tchis, *dev_Tid);
         cuResult = cudaGetLastError();
         if (cuResult != cudaSuccess) {
-            printf("host: Kernel launch error %s\n", cudaGetErrorString(cuResult));
+            printf("host: SubCalcState_v2 error %s\n", cudaGetErrorString(cuResult));
             cudaEventDestroy(e_start);
             cudaEventDestroy(e_end);
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
-
         cuResult = cudaEventRecord(e_end, streamTmp);
         if (cuResult != cudaSuccess) {
-            printf("host: cudaEventRecord(e_end) error %s\n", cudaGetErrorString(cuResult));
+            printf("host: cudaEventRecord e_end error %s\n", cudaGetErrorString(cuResult));
             cudaEventDestroy(e_start);
             cudaEventDestroy(e_end);
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
-
         cuResult = cudaEventSynchronize(e_end);
         if (cuResult != cudaSuccess) {
             printf("host: cudaEventSynchronize error %s\n", cudaGetErrorString(cuResult));
             cudaEventDestroy(e_start);
             cudaEventDestroy(e_end);
-            break;
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
         }
-
-        cuResult = cudaEventElapsedTime(&tm0, e_start, e_end);
-        if (cuResult != cudaSuccess) {
-            printf("host: cudaEventElapsedTime error %s\n", cudaGetErrorString(cuResult));
-            cudaEventDestroy(e_start);
-            cudaEventDestroy(e_end);
-            break;
-        }
-
         cudaEventDestroy(e_start);
         cudaEventDestroy(e_end);
 
-        // Process results
         cudaMemcpyAsync(Local_BPN->SpCount, dev_Bpn->SpCount, sizeof(uint32_t) * kernelblock, cudaMemcpyDeviceToHost, streamTmp);
-        
-        // Check for success condition
-        cudaError_t mR = cudaMemcpyFromSymbol(BiuKey, dev_BiuKey, 13*sizeof(uint8_t), 0, cudaMemcpyDeviceToHost);
-        if (mR == cudaSuccess && BiuKey[0] == 1) {
-            success = true;
-            break;
-        }
+        cudaStreamSynchronize(streamTmp);
 
+        cudaError_t mR = cudaMemcpyFromSymbol(BiuKey, dev_BiuKey, 13 * sizeof(uint8_t), 0, cudaMemcpyDeviceToHost);
+        if (mR != cudaSuccess) {
+            printf("cudaMemcpyFromSymbol error: %s\n", cudaGetErrorString(mR));
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return false;
+        }
+        if (BiuKey[0] == 1) {
+            gettimeofday(&end_time, NULL);
+            cudaStreamDestroy(streamTmp);
+            cudaFree(dev_Bpn);
+            cudaFree(dev_GTCB);
+            cudaFree(dev_Tid);
+            free(Local_BPN);
+            return true;
+        }
         memset(Local_BPN, 0, sizeof(BiuParaNode));
         ID++;
     }
 
-    // Cleanup resources
+    gettimeofday(&end_time, NULL);
     cudaStreamDestroy(streamTmp);
     cudaFree(dev_Bpn);
     cudaFree(dev_GTCB);
     cudaFree(dev_Tid);
     free(Local_BPN);
-
-    return success;
-}
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <cstdlib>
-#include <chrono>
-
-int main(int argc, char** argv) {
-	// Parse and validate hex parameters
-	uint64_t nC = 0x3FFE1FB6CC513FULL;
-	uint32_t aC = 0xF355F1A;
-	uint32_t aT = 0x609D6;
-	uint16_t start = 0x0000;
-	uint16_t end = 0xFFFF; 
-
-	if (argc == 6) {
-		try {
-			nC = std::stoull(argv[1], nullptr, 16);
-			aC = std::stoul(argv[2], nullptr, 16); 
-			aT = std::stoul(argv[3], nullptr, 16);
-			start = std::stoul(argv[4], nullptr, 16);
-			end = std::stoul(argv[5], nullptr, 16);
-		} catch (const std::exception& e) {
-			printf("Error parsing parameters: %s\n", e.what());
-			return 1;
-		}
-	}
-
-	// Validate parameter ranges
-	if (nC > 0xFFFFFFFFFFFFFFULL || aC > 0xFFFFFFF || aT > 0xFFFFF) {
-		printf("Invalid input parameters\n");
-		return 1;
-	}
-
-	uint8_t RndCipher[39] = {0};
-
-	// Pack challenge bits into RndCipher array
-	// nC (56 bits) -> bytes 0-6
-	RndCipher[0] = (nC >> 48) & 0xFF;
-	RndCipher[1] = (nC >> 40) & 0xFF;
-	RndCipher[2] = (nC >> 32) & 0xFF;
-	RndCipher[3] = (nC >> 24) & 0xFF;
-	RndCipher[4] = (nC >> 16) & 0xFF;
-	RndCipher[5] = (nC >> 8) & 0xFF;
-	RndCipher[6] = nC & 0xFF;
-
-	// Pack auth bits into RndCipher array
-	// aC (28 bits) -> bytes 7-10
-	RndCipher[7] = (aC >> 21) & 0x7F;  // 7 bits
-	RndCipher[8] = (aC >> 13) & 0xFF;   // 8 bits
-	RndCipher[9] = (aC >> 5) & 0xFF;    // 8 bits
-	RndCipher[10] = (aC << 3) & 0xF8;   // 5 bits
-
-	// Pack tag bits into RndCipher array  
-	// aT (20 bits) -> bytes 10-13
-	RndCipher[10] |= (aT >> 17) & 0x07; // 3 bits
-	RndCipher[11] = (aT >> 9) & 0xFF;   // 8 bits  
-	RndCipher[12] = (aT >> 1) & 0xFF;   // 8 bits
-	RndCipher[13] = (aT << 7) & 0x80;   // 1 bit
-
-	// Debug output
-	printf("Challenge: %014llX\n", nC);
-	printf("Auth: %07X\n", aC);
-	printf("Tag: %05X\n", aT);
-	printf("Range: %04X-%04X\n", start, end);
-
-	std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
-
-	bool ok = Decrypt(RndCipher);
-
-	auto decryptionEnd = std::chrono::system_clock::now();
-	std::chrono::duration<double> elapsed = decryptionEnd - start_time;
-
-	if (ok) {
-		uint8_t host_BiuKey[13];
-		cudaMemcpyFromSymbol(host_BiuKey, dev_BiuKey, sizeof(host_BiuKey), 0, cudaMemcpyDeviceToHost);
-		printf("Key recovered: ");
-		for (int i = 1; i <= 12; i++) // Assuming dev_BiuKey stores 12 bytes
-			printf("%02X", host_BiuKey[i]);
-		printf("\n");
-	} else {
-		printf("Key not found\n");
-	}
-
-	printf("Decryption time: %.3f seconds\n", elapsed.count());
-
-	return 0;
+    return false;
 }
 
+int main() {
+    uint8_t RndCipher[0x1a] = {
+        0x19, 0x88, 0x53, 0x40, 0x78, 0xFD, 0x4A, 0x73, 0x0a, 0x61, 0x36, 0x7f, 0xe5,
+        0x2d, 0x49, 0xc3, 0x8c, 0xe2, 0xd7, 0xe2, 0x7f, 0xf7, 0x3e, 0x8d, 0x05, 0x5a
+    };
 
+    cudaEvent_t start_event, end_event;
+    float cuda_time_ms;
+    cudaEventCreate(&start_event);
+    cudaEventCreate(&end_event);
+    cudaEventRecord(start_event, 0);
+
+    gettimeofday(&start, NULL);
+    if (Decrypt(RndCipher)) {
+        long time_usec = 1000000 * (end_time.tv_sec - start.tv_sec) + (end_time.tv_usec - start.tv_usec);
+        uint8_t BiuKey[13];
+        cudaError_t mR = cudaMemcpyFromSymbol(BiuKey, dev_BiuKey, 13 * sizeof(uint8_t), 0, cudaMemcpyDeviceToHost);
+        if (mR != cudaSuccess) {
+            printf("cudaMemcpyFromSymbol error: %s\n", cudaGetErrorString(mR));
+            cudaEventDestroy(start_event);
+            cudaEventDestroy(end_event);
+            return 1;
+        }
+        cudaEventRecord(end_event, 0);
+        cudaEventSynchronize(end_event);
+        cudaEventElapsedTime(&cuda_time_ms, start_event, end_event);
+        printf("Success! Time: %ld us (CUDA: %.2f ms)\nKey: ", time_usec, cuda_time_ms);
+        for (int i = 1; i < 13; i++) printf("%02x ", BiuKey[i]);
+        printf("\n");
+    } else {
+        printf("Decrypt failed\n");
+    }
+
+    cudaEventDestroy(start_event);
+    cudaEventDestroy(end_event);
+    return 0;
+}
 //////////////////////一个内核函数，筛选8行表
